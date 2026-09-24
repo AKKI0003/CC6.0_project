@@ -1,0 +1,6 @@
+fastapi
+uvicorn
+qdrant-edge-py
+qdrant-client
+numpy
+requests

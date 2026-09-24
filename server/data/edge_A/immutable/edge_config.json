@@ -1,0 +1,1 @@
+{"on_disk_payload":true,"vectors":{"text":{"size":384,"distance":"Cosine"},"space":{"size":225,"distance":"Cosine"}},"sparse_vectors":{}}
