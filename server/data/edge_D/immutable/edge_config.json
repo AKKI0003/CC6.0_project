@@ -1,1 +1,1 @@
-{"vectors":{"text":{"size":384,"distance":"Cosine"},"space":{"size":225,"distance":"Cosine"}},"sparse_vectors":{}}
+{"vectors":{"space":{"size":225,"distance":"Cosine"},"text":{"size":384,"distance":"Cosine"}},"sparse_vectors":{}}
