@@ -94,3 +94,16 @@ component, or behavior changes.
   *meaning* changed (light→dark) but one rule still used it the old way: the nav "Enter console"
   button (was invisible — text color reused the now-dark `--ivory` token) and four rgba() shadows that
   were still hardcoded to the old orange in decimal form (not caught by the hex find-replace).
+
+## v9: live console redesign
+- The 3D stage is now the console: edge-to-edge, `calc(100vh - nav)` tall, instead of a bordered box with margins.
+- Overlay chrome went frameless/HUD-style: a fleet rail with an underline on the active robot, large borderless telemetry
+  numbers, a single icon-based floating control dock (bottom-center, tooltips on every icon-only button), and a small
+  radar-style minimap. No more per-group captions or bordered cells.
+- The three stacked bottom sections (timeline / robot detail / results) plus the separate "Engineering telemetry"
+  drawer are now ONE compact tabbed panel: Timeline | Robot | Results | Vitals. Same content, same components,
+  a fraction of the vertical space.
+- Robustness: if the SSE stream is silent for 2.5s or errors, the console falls back to polling instead of sitting on
+  "Connecting..." forever.
+- Not changed: every handler, API call, Judge Mode, Ask, Chaos, Footprint, Replay, Ghost run, view modes.
+- Not restyled (still the previous look): the Judge Mode mission-report modal.

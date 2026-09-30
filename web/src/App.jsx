@@ -1,5 +1,5 @@
 import {useEffect,useRef,useState} from 'react';
-import {ArrowLeft} from 'lucide-react';
+import {ArrowLeft,Play,Pause,RotateCcw,RotateCw,Ghost,Wifi,WifiOff,Box,LayoutGrid,Crosshair,ScrollText,Table2,Cpu,ChevronRight} from 'lucide-react';
 import {Warehouse3D,COL,N} from './scene3d.js';
 import {post,Kpi,Ask,Vitals,Chaos,Footprint} from './parts.jsx';
 import Landing from './Landing.jsx';
@@ -21,8 +21,10 @@ function MiniMap({s,sel}){const cv=useRef(),Z=13,S=N*Z;
     c.strokeStyle='#7C5CFF';c.lineWidth=1.5;c.strokeRect(r.start[0]*Z+3,r.start[1]*Z+3,Z-6,Z-6);
     c.strokeStyle='#7cff67';c.beginPath();c.arc(r.goal[0]*Z+Z/2,r.goal[1]*Z+Z/2,5,0,7);c.stroke();
     Object.entries(s.robots).forEach(([id,q])=>{c.fillStyle=COL[id];c.beginPath();c.arc(q.pos[0]*Z+Z/2,q.pos[1]*Z+Z/2,id===sel?5:3.5,0,7);c.fill()})},[s,sel]);
-  return <div className="mini"><div className="eyebrow2">Minimap · Robot {sel} knowledge</div><canvas ref={cv} width={S} height={S}/>
-    <div className="lg"><span><i style={{background:'#B15C48',borderRadius:'50%'}}/>learned</span><span><i style={{background:'#B497CF',borderRadius:'50%'}}/>inherited</span><span><i style={{background:'#7cff67',borderRadius:'50%'}}/>cleared</span><span><i style={{background:'#7C5CFF'}}/>start</span><span><i style={{border:'1px solid #7cff67',background:'none',borderRadius:'50%'}}/>goal</span></div></div>}
+  return <div className="mini">
+    <canvas ref={cv} width={S} height={S}/>
+    <div className="mini-label">Robot {sel} knowledge</div>
+  </div>}
 
 function evKind(e){return e.kind==='push'||e.kind==='pull'?e.kind:e.kind==='merge'?'merge':'info'}
 function evActor(e){return ['A','B','C','D'].includes(e.robot)?e.robot:'sys'}
@@ -45,7 +47,8 @@ export default function App(){
 
 function Console({onBack}){
   const [s,setS]=useState(null),[down,setDown]=useState(false),[merge,setMerge]=useState(0),[flash,setFlash]=useState(0),[j,setJ]=useState(null),[rep,setRep]=useState(null),
-    [sel,setSel]=useState('A'),[ghost,setGhost]=useState(true),[replay,setReplay]=useState(null),[tab,setTab]=useState('mem'),[seed,setSeed]=useState('');
+    [sel,setSel]=useState('A'),[ghost,setGhost]=useState(true),[replay,setReplay]=useState(null),[tab,setTab]=useState('mem'),[seed,setSeed]=useState(''),
+    [panelTab,setPanelTab]=useState('timeline'),[view,setView]=useState('iso');
   const sc=useRef(),seen=useRef(-1),live=useRef(null),abort=useRef(false),mt=useRef();live.current=s;
   useEffect(()=>{
     const onData=d=>{setS(d);setDown(false);const last=d.events.at(-1)?.id||0;
@@ -53,8 +56,14 @@ function Console({onBack}){
         if((e.kind==='push'||e.kind==='pull')&&i++<6)setTimeout(()=>sc.current&&sc.current.emit(e.kind,e.robot),i*150);if(e.kind==='merge')mg++}
         if(mg){setMerge(mg);setFlash(f=>f+1);sc.current&&sc.current.emit('merge');clearTimeout(mt.current);mt.current=setTimeout(()=>setMerge(0),5000)}}
       seen.current=last};
-    let es,fb;try{es=new EventSource('/api/stream');es.onmessage=e=>{try{onData(JSON.parse(e.data))}catch{}};es.onerror=()=>setDown(true)}
-    catch{fb=setInterval(async()=>{try{onData(await(await fetch('/api/state')).json())}catch{setDown(true)}},250)}
+    let es,fb,got=false;
+    const startPolling=()=>{if(fb)return;fb=setInterval(async()=>{try{onData(await(await fetch('/api/state')).json())}catch{setDown(true)}},250)};
+    try{
+      es=new EventSource('/api/stream');
+      es.onmessage=e=>{got=true;try{onData(JSON.parse(e.data))}catch{}};
+      es.onerror=()=>{setDown(true);startPolling()}; // SSE dropped (or never connected) — fall back rather than get stuck
+      setTimeout(()=>{if(!got)startPolling()},2500); // and if it's just silent (no error, no message), fall back too
+    }catch{startPolling()}
     return()=>{es&&es.close();fb&&clearInterval(fb)}},[]);
   const waitDone=async id=>{await sleep(900);for(let i=0;i<300&&!abort.current;i++){const r=live.current.robots[id];if(r.done&&!r.running)return;await sleep(300)}};
   const STEPS=['New world','A learns offline','B learns offline','Offline proof','Reconnect and merge','B inherits','A inherits','Mission report'];
@@ -92,51 +101,63 @@ function Console({onBack}){
     </nav></div>
     <section className="stage">
       <Stage3D s={s} sel={sel} opt={{ghost,replay}} sc={sc}/>
-      <div className="ov tl">{ids.map(id=><button key={id} className={'rc'+(sel===id?' on':'')} style={{'--c':COL[id]}} onClick={()=>setSel(id)}><i/><span className="rlabel"><b>Robot {id}</b><small>{s.robots[id].status}</small></span></button>)}</div>
-      <div className="ov tr"><div className="st"><b>{avoided}</b><span>Collisions avoided</span></div><div className="st"><b>{eff||'–'}{eff?'%':''}</b><span>Route efficiency</span></div><div className="st"><b>{p50.toFixed(2)}</b><span>ms local query</span></div></div>
-      <div className={'ov dock'+(j?' hide':'')}>
-        <div className="dgroup"><span className="glabel">Mission</span>
-          <button className="pri" onClick={()=>post(sel+(r.running?'/pause':'/run'))}>{r.running?'Pause':'Run mission '+(r.mission+1)}</button>
-          <button onClick={()=>post(sel+'/rerun')}>Restart</button><button onClick={()=>post(sel+'/mission/'+(1-r.mission))}>Mission {2-r.mission}</button></div>
-        <div className="dgroup vsel"><span className="glabel">View</span>
-          <button onClick={()=>sc.current.view('iso')}>3D</button><button onClick={()=>sc.current.view('top')}>Top</button><button onClick={()=>sc.current.view('follow')}>Follow</button></div>
-        <div className="dgroup"><span className="glabel">History</span>
-          <button className={ghost?'ghost-btn on':'ghost-btn'} onClick={()=>setGhost(!ghost)}>Ghost run</button><button disabled={!r.done||!!replay} onClick={()=>playReplay(r)}>Replay</button></div>
-        <div className="dgroup"><span className="glabel">Connection</span>
-          <button className={'link '+(r.online?'on':'off')} onClick={()=>post(sel+'/online/'+(r.online?0:1))}>{r.online?'Uplink on':'Offline'}</button>
-          <span className={'lock '+(r.uplink===0?'ok':'')}><i/>{r.uplink===0?'0 uplink calls':r.uplink+' calls'}</span></div>
-      </div>
+      <div className="ov tl"><div className="fleet-rail">{ids.map(id=><button key={id} className={'rpill'+(sel===id?' on':'')} style={{'--c':COL[id]}} onClick={()=>setSel(id)}>
+        <i/>Robot {id}<small>{s.robots[id].status}</small></button>)}</div></div>
+      <div className="ov tr"><div className="tele">
+        <div className="stat"><b>{avoided}</b><span>Collisions avoided</span></div>
+        <div className="stat"><b>{eff||'–'}{eff?'%':''}</b><span>Route efficiency</span></div>
+        <div className="stat"><b>{p50.toFixed(2)}</b><span>ms query</span></div>
+      </div></div>
+      <div className={'ov dock'+(j?' hide':'')}><div className="dockbar">
+        <button className="dbtn pri" title={r.running?'Pause':'Run mission '+(r.mission+1)} onClick={()=>post(sel+(r.running?'/pause':'/run'))}>{r.running?<Pause size={15}/>:<Play size={15}/>}<span>{r.running?'Pause':'Run '+(r.mission+1)}</span></button>
+        <button className="dbtn icon" title="Restart" onClick={()=>post(sel+'/rerun')}><RotateCcw size={15}/></button>
+        <button className="dbtn" title="Switch mission" onClick={()=>post(sel+'/mission/'+(1-r.mission))}>Mission {2-r.mission}</button>
+        <i className="ddiv"/>
+        <button className={'dbtn icon'+(view==='iso'?' on':'')} title="3D view" onClick={()=>{sc.current.view('iso');setView('iso')}}><Box size={15}/></button>
+        <button className={'dbtn icon'+(view==='top'?' on':'')} title="Top view" onClick={()=>{sc.current.view('top');setView('top')}}><LayoutGrid size={15}/></button>
+        <button className={'dbtn icon'+(view==='follow'?' on':'')} title="Follow robot" onClick={()=>{sc.current.view('follow');setView('follow')}}><Crosshair size={15}/></button>
+        <i className="ddiv"/>
+        <button className={'dbtn icon'+(ghost?' on':'')} title="Ghost run" onClick={()=>setGhost(!ghost)}><Ghost size={15}/></button>
+        <button className="dbtn icon" title="Replay" disabled={!r.done||!!replay} onClick={()=>playReplay(r)}><RotateCw size={15}/></button>
+        <i className="ddiv"/>
+        <button className={'dbtn '+(r.online?'up-on':'up-off')} title={r.online?'Go offline':'Reconnect'} onClick={()=>post(sel+'/online/'+(r.online?0:1))}>{r.online?<Wifi size={15}/>:<WifiOff size={15}/>}<span>{r.online?'Online':'Offline'}</span></button>
+        <span className={'calls'+(r.uplink===0?' ok':'')}>{r.uplink}<small>calls</small></span>
+      </div></div>
       <div className="ov br"><MiniMap s={s} sel={sel}/></div>
       {j&&<div className="cap"><button onClick={()=>{abort.current=true}}>Exit</button><div className="stp">Step {j.i+1} / {STEPS.length} · {STEPS[j.i]}</div><p>{j.t}</p><div className="dots">{STEPS.map((_,i)=><i key={i} className={i<=j.i?'on':''}/>)}</div></div>}
     </section>
 
-    <div className="consolebody">
-      <div className="cgrid">
-        <div>
-          <div className="csec-h"><h3>Mission timeline</h3><span className="chip">{s.events.length} events</span></div>
-          <Timeline events={s.events}/>
-        </div>
-        <div className="rdet">
-          <div className="csec-h"><h3>Robot {sel}</h3>
-            <div className="rtabs">{[['mem','Memory'],['why','Why'],['ask','Ask'],['log','Log']].map(([k,l])=><button key={k} className={tab===k?'on':''} onClick={()=>setTab(k)}>{l}</button>)}</div></div>
+    <div className="panel">
+      <div className="panel-tabs">
+        <button className={panelTab==='timeline'?'on':''} onClick={()=>setPanelTab('timeline')}><ScrollText size={14}/>Timeline<i className="ct">{s.events.length}</i></button>
+        <button className={panelTab==='robot'?'on':''} onClick={()=>setPanelTab('robot')} style={{'--c':COL[sel]}}><i className="rdot"/>Robot {sel}</button>
+        <button className={panelTab==='results'?'on':''} onClick={()=>setPanelTab('results')}><Table2 size={14}/>Results</button>
+        <button className={panelTab==='vitals'?'on':''} onClick={()=>setPanelTab('vitals')}><Cpu size={14}/>Vitals</button>
+        <span className="grow"/>
+        <ChevronRight size={14} className="hint"/>
+      </div>
+      <div className="panel-body">
+        {panelTab==='timeline'&&<Timeline events={s.events}/>}
+
+        {panelTab==='robot'&&<div className="robot-tab">
+          <div className="rtabs">{[['mem','Memory'],['why','Why this route'],['ask','Ask'],['log','Log']].map(([k,l])=><button key={k} className={tab===k?'on':''} onClick={()=>setTab(k)}>{l}</button>)}</div>
           <div className="rpane">
             {tab==='mem'&&(r.mem.length?r.mem.map((m,i)=><div key={i} className={'mem '+(isInh(m,sel)?'inh':'own')}><span className="k">{isInh(m,sel)?'Fleet':'Learned'}</span>{m.text}</div>):<div className="mu" style={{padding:'8px 0'}}>Empty. Run a mission and Robot {sel} will learn.</div>)}
             {tab==='why'&&(r.explain?<div><div className="cd"><b>Last plan at ({r.explain.pos.join(',')})</b>Plain A*: {r.explain.raw} steps · with memory: <b style={{display:'inline',textTransform:'none',fontSize:'inherit',color:'var(--on-dark)'}}>{r.explain.mem}</b>. Remembered obstacles are walls, so this is the shortest route the robot knows.</div>{r.explain.hits.map(h=><div key={h.id} className="mem mu"><span className="k">#{h.id}</span>similarity {h.score} · [{h.sources.join('+')}]</div>)}</div>:<div className="mu" style={{padding:'8px 0'}}>No plan yet.</div>)}
             {tab==='ask'&&<Ask id={sel}/>}{tab==='log'&&r.log.map((t,i)=><div key={i} className="mem mu">{t}</div>)}
           </div>
-        </div>
-      </div>
+        </div>}
 
-      <div className="results">
-        <div className="csec-h"><h3>Results</h3></div>
-        <div className="res-nums"><div><b>{avoided}</b><span>Collisions avoided</span></div><div><b>{eff||'–'}{eff?'%':''}</b><span>Route efficiency</span></div><div><b>{p50.toFixed(2)} ms</b><span>Local query p50</span></div><div><b>{s.fleet.length}</b><span>Fleet memories</span></div></div>
-        <table><thead><tr><th>Robot</th><th>Run</th><th>Inherited</th><th>Bumps</th><th>Avoided</th><th>Efficiency</th></tr></thead>
-          <tbody>{ids.flatMap(id=>s.robots[id].runs.map((x,i)=><tr key={id+i}><td style={{color:COL[id],fontWeight:600}}>{id}</td><td>{x.mission}</td><td>{x.inh0}</td><td>{x.hits}</td><td className={x.raw_hits-x.hits>0?'ok':''}>{Math.max(0,x.raw_hits-x.hits)}</td><td>{x.eff}%</td></tr>))}{!runs.length&&<tr><td colSpan="6" className="mu" style={{textAlign:'left'}}>No finished runs yet.</td></tr>}</tbody></table>
-        {lastB&&lastB.inh0>0&&lastB.hits<lastB.raw_hits&&<div className="win">Robot B avoided {lastB.raw_hits-lastB.hits} obstacle(s) it never saw itself.</div>}
+        {panelTab==='results'&&<div className="results-tab">
+          <div className="res-nums"><div><b>{avoided}</b><span>Collisions avoided</span></div><div><b>{eff||'–'}{eff?'%':''}</b><span>Route efficiency</span></div><div><b>{p50.toFixed(2)} ms</b><span>Local query p50</span></div><div><b>{s.fleet.length}</b><span>Fleet memories</span></div></div>
+          <table><thead><tr><th>Robot</th><th>Run</th><th>Inherited</th><th>Bumps</th><th>Avoided</th><th>Efficiency</th></tr></thead>
+            <tbody>{ids.flatMap(id=>s.robots[id].runs.map((x,i)=><tr key={id+i}><td style={{color:COL[id],fontWeight:600}}>{id}</td><td>{x.mission}</td><td>{x.inh0}</td><td>{x.hits}</td><td className={x.raw_hits-x.hits>0?'ok':''}>{Math.max(0,x.raw_hits-x.hits)}</td><td>{x.eff}%</td></tr>))}{!runs.length&&<tr><td colSpan="6" className="mu" style={{textAlign:'left'}}>No finished runs yet.</td></tr>}</tbody></table>
+          {lastB&&lastB.inh0>0&&lastB.hits<lastB.raw_hits&&<div className="win">Robot B avoided {lastB.raw_hits-lastB.hits} obstacle(s) it never saw itself.</div>}
+        </div>}
+
+        {panelTab==='vitals'&&<div className="vitals-tab"><div><div className="eyebrow2">Edge vitals · Robot {sel}</div><Vitals v={r.vitals}/></div><Footprint/></div>}
       </div>
     </div>
-
-    <details className="adv"><summary>Engineering telemetry <span className="tag2">Edge vitals · footprint benchmark</span></summary><div className="advg"><div><div className="eyebrow2">Edge vitals · Robot {sel}</div><Vitals v={r.vitals}/></div><Footprint/></div></details>
 
     {rep&&<div className="modal" onClick={()=>setRep(null)}><div className="rep" onClick={e=>e.stopPropagation()}><div className="eyebrow2">Mission report · all numbers measured live</div><h2>Fleet memory works</h2>
       <p>Each robot inherited what the other learned offline, then avoided {rep.avoided} of the {rep.naive} obstacles a naive route would have hit.</p>
